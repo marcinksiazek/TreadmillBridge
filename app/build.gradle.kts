@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    kotlin("kapt")
+    id("dagger.hilt.android.plugin")
 }
 
 android {
@@ -56,7 +58,21 @@ dependencies {
     // Note: for now the manager uses Android native BLE APIs for scanning/connecting to ensure a working baseline.
     implementation("no.nordicsemi.android:ble:2.4.0")
 
+    // Hilt
+    implementation("com.google.dagger:hilt-android:2.44")
+    kapt("com.google.dagger:hilt-compiler:2.44")
+    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
+
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    // ViewModel Compose
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+
     testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("app.cash.turbine:turbine:1.0.0")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
