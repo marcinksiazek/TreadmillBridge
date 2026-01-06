@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,17 +32,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.thirdwave.treadmillbridge.data.model.ConnectionState
+import com.thirdwave.treadmillbridge.data.model.DiscoveredDevice
+import com.thirdwave.treadmillbridge.ui.state.TreadmillUiState
 import com.thirdwave.treadmillbridge.ui.theme.TreadmillBridgeTheme
+import com.thirdwave.treadmillbridge.ui.viewmodel.TreadmillViewModel
 import com.thirdwave.treadmillbridge.utils.UnitConversions
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    private var bridgeManager: BluetoothBridgeManager? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        bridgeManager = BluetoothBridgeManager(this)
 
         // Required permissions for Android 12+
         val requiredPermissions = arrayOf(
@@ -77,15 +82,20 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TreadmillBridgeTheme {
-                TreadmillBridgeApp(bridgeManager!!, permissionsGranted = permissionsGrantedState.value)
+                val viewModel: TreadmillViewModel = viewModel()
+                val uiState by viewModel.uiState.collectAsState()
+
+                TreadmillBridgeApp(
+                    uiState = uiState,
+                    onStartScan = viewModel::onStartScan,
+                    onStopScan = viewModel::onStopScan,
+                    onConnectToDevice = viewModel::onConnectToDevice,
+                    onDisconnectTreadmill = viewModel::onDisconnectTreadmill,
+                    onStartGattServer = viewModel::onStartGattServer,
+                    onStopGattServer = viewModel::onStopGattServer
+                )
             }
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        bridgeManager?.stop()
-        bridgeManager = null
     }
 }
 
@@ -196,10 +206,8 @@ private fun PreviewTreadmillBridgeApp() {
 
                 // Status panel at bottom
                 StatusPanel(
-                    treadmillConnected = false,
-                    treadmillName = null,
-                    gattServerRunning = false,
-                    gattClientConnected = null,
+                    connectionState = ConnectionState.Disconnected,
+                    gattServerState = com.thirdwave.treadmillbridge.data.model.GattServerState.Stopped,
                     modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
                 )
             }
@@ -208,51 +216,16 @@ private fun PreviewTreadmillBridgeApp() {
 }
 
 @Composable
-fun TreadmillBridgeApp(bridgeManager: BluetoothBridgeManager, permissionsGranted: Boolean) {
+fun TreadmillBridgeApp(
+    uiState: TreadmillUiState,
+    onStartScan: () -> Unit,
+    onStopScan: () -> Unit,
+    onConnectToDevice: (String) -> Unit,
+    onDisconnectTreadmill: () -> Unit,
+    onStartGattServer: () -> Unit,
+    onStopGattServer: () -> Unit
+) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
-    var discoveredDevices by remember { mutableStateOf<List<DiscoveredDevice>>(emptyList()) }
-    var connectedDeviceName by remember { mutableStateOf<String?>(null) }
-    var isConnected by remember { mutableStateOf(false) }
-    var isScanning by remember { mutableStateOf(false) }
-    var isGattServerRunning by remember { mutableStateOf(false) }
-    var gattClientConnectedName by remember { mutableStateOf<String?>(null) }
-
-    val manager = remember { bridgeManager }
-
-    // Set up callbacks
-    LaunchedEffect(manager) {
-        manager.onDeviceDiscovered = { device ->
-            // Add to list if not already present
-            if (discoveredDevices.none { it.address == device.address }) {
-                discoveredDevices = discoveredDevices + device
-            }
-        }
-
-        manager.onConnectionStateChanged = { connected, deviceName ->
-            isConnected = connected
-            connectedDeviceName = deviceName
-            if (connected) {
-                // Clear device list and stop scanning when connected
-                discoveredDevices = emptyList()
-                isScanning = false
-            }
-        }
-
-        manager.onGattServerStateChanged = { running ->
-            isGattServerRunning = running
-        }
-
-        manager.onGattClientConnected = { clientName ->
-            gattClientConnectedName = clientName
-        }
-
-        manager.onGattClientDisconnected = {
-            gattClientConnectedName = null
-        }
-
-        // Initialize state from manager
-        isGattServerRunning = manager.isGattServerRunning
-    }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -279,31 +252,30 @@ fun TreadmillBridgeApp(bridgeManager: BluetoothBridgeManager, permissionsGranted
                         .padding(16.dp)
                         .padding(bottom = 120.dp) // Make room for status panel
                 ) {
-                    Text(text = "Speed: ${manager.speedKph} kph", style = MaterialTheme.typography.bodyLarge)
+                    Text(text = "Speed: ${uiState.metrics.speedKph} kph", style = MaterialTheme.typography.bodyLarge)
 
                     // Display pace in min/km format using conversion utility
-                    val paceString = UnitConversions.speedToPaceString(manager.speedKph)
                     Text(
-                        text = paceString?.let { "Pace: $it min/km" } ?: "Pace: -- min/km",
+                        text = uiState.metrics.paceString?.let { "Pace: $it min/km" } ?: "Pace: -- min/km",
                         style = MaterialTheme.typography.bodyLarge
                     )
 
-                    Text(text = "Incline: ${manager.inclinePercent} %", style = MaterialTheme.typography.bodyLarge)
-                    Text(text = "Cadence: ${manager.cadence}", style = MaterialTheme.typography.bodyLarge)
+                    Text(text = "Incline: ${uiState.metrics.inclinePercent} %", style = MaterialTheme.typography.bodyLarge)
+                    Text(text = "Cadence: ${uiState.metrics.cadence}", style = MaterialTheme.typography.bodyLarge)
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // GATT Server buttons
-                    if (!isGattServerRunning) {
+                    if (!uiState.gattServerState.isRunning) {
                         Button(
-                            onClick = { manager.startLocalGattServer() },
+                            onClick = onStartGattServer,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Start GATT Server")
                         }
                     } else {
                         Button(
-                            onClick = { manager.stopLocalGattServer() },
+                            onClick = onStopGattServer,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Stop GATT Server")
@@ -312,38 +284,48 @@ fun TreadmillBridgeApp(bridgeManager: BluetoothBridgeManager, permissionsGranted
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Treadmill connection buttons
-                    if (!isConnected) {
-                        Button(
-                            onClick = {
-                                discoveredDevices = emptyList()
-                                manager.startScan()
-                                isScanning = true
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Connect Treadmill")
+                    // Treadmill connection buttons using sealed class
+                    when (uiState.connectionState) {
+                        is ConnectionState.Disconnected -> {
+                            Button(
+                                onClick = onStartScan,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Connect Treadmill")
+                            }
                         }
-                    } else {
-                        Button(
-                            onClick = {
-                                manager.disconnectTreadmill()
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Disconnect Treadmill")
+                        is ConnectionState.Connecting -> {
+                            Button(
+                                onClick = { },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = false
+                            ) {
+                                Text("Connecting...")
+                            }
+                        }
+                        is ConnectionState.Connected -> {
+                            Button(
+                                onClick = onDisconnectTreadmill,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Disconnect Treadmill")
+                            }
+                        }
+                        is ConnectionState.Failed -> {
+                            Button(
+                                onClick = onStartScan,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Retry Connection")
+                            }
                         }
                     }
 
                     // Stop Scanning button (only when scanning)
-                    if (isScanning && !isConnected) {
+                    if (uiState.discoveryState.isScanning && !uiState.connectionState.isConnected) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
-                            onClick = {
-                                manager.stopScan()
-                                isScanning = false
-                                discoveredDevices = emptyList()
-                            },
+                            onClick = onStopScan,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Stop Scanning")
@@ -353,7 +335,9 @@ fun TreadmillBridgeApp(bridgeManager: BluetoothBridgeManager, permissionsGranted
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Device list (only when scanning and not connected)
-                    if (isScanning && !isConnected && discoveredDevices.isNotEmpty()) {
+                    if (uiState.discoveryState.isScanning &&
+                        !uiState.connectionState.isConnected &&
+                        uiState.discoveryState.discoveredDevices.isNotEmpty()) {
                         Text(
                             text = "Discovered Devices:",
                             style = MaterialTheme.typography.titleMedium
@@ -361,13 +345,10 @@ fun TreadmillBridgeApp(bridgeManager: BluetoothBridgeManager, permissionsGranted
                         Spacer(modifier = Modifier.height(8.dp))
 
                         LazyColumn {
-                            items(discoveredDevices) { device ->
+                            items(uiState.discoveryState.discoveredDevices) { device ->
                                 DeviceListItem(
                                     device = device,
-                                    onConnect = {
-                                        manager.connectToDevice(device.address)
-                                        isScanning = false
-                                    }
+                                    onConnect = { onConnectToDevice(device.address) }
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -377,10 +358,8 @@ fun TreadmillBridgeApp(bridgeManager: BluetoothBridgeManager, permissionsGranted
 
                 // Status panel at bottom
                 StatusPanel(
-                    treadmillConnected = isConnected,
-                    treadmillName = connectedDeviceName,
-                    gattServerRunning = isGattServerRunning,
-                    gattClientConnected = gattClientConnectedName,
+                    connectionState = uiState.connectionState,
+                    gattServerState = uiState.gattServerState,
                     modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
                 )
             }
@@ -390,10 +369,8 @@ fun TreadmillBridgeApp(bridgeManager: BluetoothBridgeManager, permissionsGranted
 
 @Composable
 fun StatusPanel(
-    treadmillConnected: Boolean,
-    treadmillName: String?,
-    gattServerRunning: Boolean,
-    gattClientConnected: String?,
+    connectionState: ConnectionState,
+    gattServerState: com.thirdwave.treadmillbridge.data.model.GattServerState,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -414,37 +391,32 @@ fun StatusPanel(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Treadmill connection status
+            // Treadmill connection status using sealed class
+            val treadmillStatus = when (connectionState) {
+                is ConnectionState.Disconnected -> "Not connected"
+                is ConnectionState.Connecting -> "Connecting..."
+                is ConnectionState.Connected -> "Connected to ${connectionState.deviceName}"
+                is ConnectionState.Failed -> "Failed: ${connectionState.reason}"
+            }
             Text(
-                text = if (treadmillConnected) {
-                    "Treadmill: Connected to $treadmillName"
-                } else {
-                    "Treadmill: Not connected"
-                },
+                text = "Treadmill: $treadmillStatus",
                 style = MaterialTheme.typography.bodyMedium
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // GATT Server status
+            // GATT Server status using sealed class
+            val gattStatus = when (gattServerState) {
+                is com.thirdwave.treadmillbridge.data.model.GattServerState.Stopped -> "Not running"
+                is com.thirdwave.treadmillbridge.data.model.GattServerState.Starting -> "Starting..."
+                is com.thirdwave.treadmillbridge.data.model.GattServerState.Running -> "Started"
+                is com.thirdwave.treadmillbridge.data.model.GattServerState.ClientConnected ->
+                    "Started (Client: ${gattServerState.clientName})"
+            }
             Text(
-                text = if (gattServerRunning) {
-                    "GATT Server: Started"
-                } else {
-                    "GATT Server: Not running"
-                },
+                text = "GATT Server: $gattStatus",
                 style = MaterialTheme.typography.bodyMedium
             )
-
-            // GATT Client connection status
-            if (gattClientConnected != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "GATT Client Connected: $gattClientConnected",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
         }
     }
 }
