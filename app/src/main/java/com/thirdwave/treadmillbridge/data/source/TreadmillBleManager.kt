@@ -16,10 +16,13 @@ import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.thirdwave.treadmillbridge.data.model.DiscoveredDevice
+import com.thirdwave.treadmillbridge.ble.FTMSControlPointResponse
 import com.thirdwave.treadmillbridge.ble.FTMSFeatureData
 import com.thirdwave.treadmillbridge.ble.FTMSMachineStatus
 import com.thirdwave.treadmillbridge.ble.FTMSTreadmillData
+import com.thirdwave.treadmillbridge.ble.InclineRange
 import com.thirdwave.treadmillbridge.ble.ParsedFTMSFeatures
+import com.thirdwave.treadmillbridge.ble.SpeedRange
 import dagger.hilt.android.qualifiers.ApplicationContext
 import no.nordicsemi.android.ble.BleManager
 import java.util.UUID
@@ -49,6 +52,9 @@ class TreadmillBleManager @Inject constructor(
     var onMetricsReceived: ((FTMSTreadmillData) -> Unit)? = null
     var onFeaturesReceived: ((ParsedFTMSFeatures) -> Unit)? = null
     var onMachineStatusReceived: ((FTMSMachineStatus) -> Unit)? = null
+    var onControlPointResponse: ((FTMSControlPointResponse) -> Unit)? = null
+    var onSpeedRangeReceived: ((SpeedRange) -> Unit)? = null
+    var onInclineRangeReceived: ((InclineRange) -> Unit)? = null
     
     private var nordicManager: NordicTreadmillManager? = null
     private var scanner: BluetoothLeScanner? = null
@@ -59,6 +65,9 @@ class TreadmillBleManager @Inject constructor(
         val FTMS_TREADMILL_DATA_UUID: UUID = UUID.fromString("00002ACD-0000-1000-8000-00805f9b34fb")
         val FTMS_FEATURE_UUID: UUID = UUID.fromString("00002ACC-0000-1000-8000-00805f9b34fb")
         val FTMS_MACHINE_STATUS_UUID: UUID = UUID.fromString("00002ADA-0000-1000-8000-00805f9b34fb")
+        val FTMS_CONTROL_POINT_UUID: UUID = UUID.fromString("00002AD9-0000-1000-8000-00805f9b34fb")
+        val FTMS_SPEED_RANGE_UUID: UUID = UUID.fromString("00002AD4-0000-1000-8000-00805f9b34fb")
+        val FTMS_INCLINE_RANGE_UUID: UUID = UUID.fromString("00002AD5-0000-1000-8000-00805f9b34fb")
     }
     
     // Permission helper
@@ -74,6 +83,9 @@ class TreadmillBleManager @Inject constructor(
         private var treadmillDataCharacteristic: BluetoothGattCharacteristic? = null
         private var featureCharacteristic: BluetoothGattCharacteristic? = null
         private var machineStatusCharacteristic: BluetoothGattCharacteristic? = null
+        private var controlPointCharacteristic: BluetoothGattCharacteristic? = null
+        private var speedRangeCharacteristic: BluetoothGattCharacteristic? = null
+        private var inclineRangeCharacteristic: BluetoothGattCharacteristic? = null
         
         override fun getMinLogPriority(): Int = Log.VERBOSE
         
@@ -115,6 +127,24 @@ class TreadmillBleManager @Inject constructor(
                         Log.w(TAG, "FTMS Machine Status characteristic not found (optional)")
                     }
 
+                    // Control Point characteristic is optional but needed for treadmill control
+                    controlPointCharacteristic = service.getCharacteristic(FTMS_CONTROL_POINT_UUID)
+                    if (controlPointCharacteristic == null) {
+                        Log.w(TAG, "FTMS Control Point characteristic not found (optional)")
+                    }
+
+                    // Supported Speed Range characteristic is optional
+                    speedRangeCharacteristic = service.getCharacteristic(FTMS_SPEED_RANGE_UUID)
+                    if (speedRangeCharacteristic == null) {
+                        Log.w(TAG, "FTMS Speed Range characteristic not found (optional)")
+                    }
+
+                    // Supported Inclination Range characteristic is optional
+                    inclineRangeCharacteristic = service.getCharacteristic(FTMS_INCLINE_RANGE_UUID)
+                    if (inclineRangeCharacteristic == null) {
+                        Log.w(TAG, "FTMS Inclination Range characteristic not found (optional)")
+                    }
+
                     return true
                 }
                 
@@ -127,6 +157,32 @@ class TreadmillBleManager @Inject constructor(
                                 onFeaturesReceived?.invoke(features)
                             } else {
                                 Log.w(TAG, "Failed to parse FTMS features")
+                            }
+                        }.enqueue()
+                    }
+
+                    // Read speed range characteristic once after connection
+                    speedRangeCharacteristic?.let { char ->
+                        readCharacteristic(char).with { _, data ->
+                            val range = SpeedRange.parse(data.value ?: ByteArray(0))
+                            if (range != null) {
+                                onSpeedRangeReceived?.invoke(range)
+                                Log.i(TAG, "Speed range: ${range.minKmh}-${range.maxKmh} km/h, step ${range.stepKmh}")
+                            } else {
+                                Log.w(TAG, "Failed to parse FTMS speed range")
+                            }
+                        }.enqueue()
+                    }
+
+                    // Read incline range characteristic once after connection
+                    inclineRangeCharacteristic?.let { char ->
+                        readCharacteristic(char).with { _, data ->
+                            val range = InclineRange.parse(data.value ?: ByteArray(0))
+                            if (range != null) {
+                                onInclineRangeReceived?.invoke(range)
+                                Log.i(TAG, "Incline range: ${range.minPercent}-${range.maxPercent}%, step ${range.stepPercent}")
+                            } else {
+                                Log.w(TAG, "Failed to parse FTMS incline range")
                             }
                         }.enqueue()
                     }
@@ -159,14 +215,43 @@ class TreadmillBleManager @Inject constructor(
 
                         enableNotifications(char).enqueue()
                     }
+
+                    // Subscribe to control point indications (responses to commands)
+                    controlPointCharacteristic?.let { char ->
+                        setIndicationCallback(char).with { _, data ->
+                            val response = FTMSControlPointResponse.parse(data.value ?: ByteArray(0))
+                            if (response != null) {
+                                onControlPointResponse?.invoke(response)
+                                Log.i(TAG, "Control point response: ${response.humanReadableMessage}")
+                            } else {
+                                Log.w(TAG, "Failed to parse control point response")
+                            }
+                        }
+
+                        enableIndications(char).enqueue()
+                    }
                 }
                 
                 override fun onServicesInvalidated() {
                     treadmillDataCharacteristic = null
                     featureCharacteristic = null
                     machineStatusCharacteristic = null
+                    controlPointCharacteristic = null
+                    speedRangeCharacteristic = null
+                    inclineRangeCharacteristic = null
                 }
             }
+        }
+
+        /**
+         * Write command to control point characteristic.
+         * Returns true if write was enqueued, false if characteristic not available.
+         */
+        fun writeControlPoint(command: ByteArray): Boolean {
+            val char = controlPointCharacteristic ?: return false
+            writeCharacteristic(char, command, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+                .enqueue()
+            return true
         }
     }
     
@@ -309,6 +394,14 @@ class TreadmillBleManager @Inject constructor(
         nordicManager?.disconnect()?.enqueue()
     }
     
+    /**
+     * Write command to control point characteristic.
+     * Returns true if write was enqueued, false if not connected or characteristic not available.
+     */
+    fun writeControlPoint(command: ByteArray): Boolean {
+        return nordicManager?.writeControlPoint(command) ?: false
+    }
+
     /**
      * Cleanup resources.
      */

@@ -2,7 +2,10 @@ package com.thirdwave.treadmillbridge.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.thirdwave.treadmillbridge.ble.InclineRange
+import com.thirdwave.treadmillbridge.ble.SpeedRange
 import com.thirdwave.treadmillbridge.data.model.ConnectionState
+import com.thirdwave.treadmillbridge.data.model.ControlPointResponseMessage
 import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
 import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
@@ -15,6 +18,8 @@ import com.thirdwave.treadmillbridge.data.repository.HrMonitorRepository
 import com.thirdwave.treadmillbridge.data.repository.TreadmillRepository
 import com.thirdwave.treadmillbridge.ui.state.TreadmillUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -47,9 +52,12 @@ class TreadmillViewModel @Inject constructor(
         },
         combine(
             repository.discoveryState,
-            repository.machineStatusMessage
-        ) { discovery, statusMessage ->
-            DiscoveryAndStatusState(discovery, statusMessage)
+            repository.machineStatusMessage,
+            repository.controlPointResponse,
+            repository.speedRange,
+            repository.inclineRange
+        ) { discovery, statusMessage, controlResponse, speedRange, inclineRange ->
+            DiscoveryAndStatusState(discovery, statusMessage, controlResponse, speedRange, inclineRange)
         },
         combine(
             hrRepository.hrMetrics,
@@ -67,6 +75,9 @@ class TreadmillViewModel @Inject constructor(
             gattServerState = core.gattServerState,
             discoveryState = discoveryAndStatus.discoveryState,
             machineStatusMessage = discoveryAndStatus.statusMessage,
+            controlPointResponse = discoveryAndStatus.controlResponse,
+            speedRange = discoveryAndStatus.speedRange,
+            inclineRange = discoveryAndStatus.inclineRange,
             permissionsGranted = true,
             hrMetrics = hr.hrMetrics,
             hrConnectionState = hr.hrConnectionState,
@@ -89,7 +100,10 @@ class TreadmillViewModel @Inject constructor(
 
     private data class DiscoveryAndStatusState(
         val discoveryState: DiscoveryState,
-        val statusMessage: MachineStatusMessage?
+        val statusMessage: MachineStatusMessage?,
+        val controlResponse: ControlPointResponseMessage?,
+        val speedRange: SpeedRange,
+        val inclineRange: InclineRange
     )
 
     private data class HrState(
@@ -159,6 +173,60 @@ class TreadmillViewModel @Inject constructor(
     fun onDisconnectHrMonitor() {
         viewModelScope.launch {
             hrRepository.disconnect()
+        }
+    }
+
+    // Control Point commands
+    private companion object {
+        const val DEBOUNCE_DELAY_MS = 300L
+    }
+
+    private var speedDebounceJob: Job? = null
+    private var inclineDebounceJob: Job? = null
+
+    fun onRequestControl() {
+        viewModelScope.launch {
+            repository.requestControl()
+        }
+    }
+
+    fun onResetMachine() {
+        viewModelScope.launch {
+            repository.resetMachine()
+        }
+    }
+
+    fun onSetTargetSpeed(speedKmh: Float) {
+        speedDebounceJob?.cancel()
+        speedDebounceJob = viewModelScope.launch {
+            delay(DEBOUNCE_DELAY_MS)
+            repository.setTargetSpeed(speedKmh)
+        }
+    }
+
+    fun onSetTargetInclination(inclinePercent: Float) {
+        inclineDebounceJob?.cancel()
+        inclineDebounceJob = viewModelScope.launch {
+            delay(DEBOUNCE_DELAY_MS)
+            repository.setTargetInclination(inclinePercent)
+        }
+    }
+
+    fun onStartOrResume() {
+        viewModelScope.launch {
+            repository.startOrResume()
+        }
+    }
+
+    fun onStopMachine() {
+        viewModelScope.launch {
+            repository.stopMachine()
+        }
+    }
+
+    fun onPauseMachine() {
+        viewModelScope.launch {
+            repository.pauseMachine()
         }
     }
 

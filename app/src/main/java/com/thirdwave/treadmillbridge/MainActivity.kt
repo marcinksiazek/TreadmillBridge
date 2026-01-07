@@ -105,7 +105,14 @@ class MainActivity : ComponentActivity() {
                     onStartHrScan = viewModel::onStartHrScan,
                     onStopHrScan = viewModel::onStopHrScan,
                     onConnectToHrDevice = viewModel::onConnectToHrDevice,
-                    onDisconnectHrMonitor = viewModel::onDisconnectHrMonitor
+                    onDisconnectHrMonitor = viewModel::onDisconnectHrMonitor,
+                    onRequestControl = viewModel::onRequestControl,
+                    onResetMachine = viewModel::onResetMachine,
+                    onStartOrResume = viewModel::onStartOrResume,
+                    onPauseMachine = viewModel::onPauseMachine,
+                    onStopMachine = viewModel::onStopMachine,
+                    onSetTargetSpeed = viewModel::onSetTargetSpeed,
+                    onSetTargetInclination = viewModel::onSetTargetInclination
                 )
             }
         }
@@ -192,7 +199,17 @@ private fun PreviewTreadmillBridgeApp() {
                         modifier = Modifier.padding(innerPadding).padding(16.dp)
                     )
 
-                    AppDestinations.CONTROL -> ControlScreen(modifier = Modifier.padding(innerPadding).padding(16.dp))
+                    AppDestinations.CONTROL -> ControlScreen(
+                        uiState = mockUiState,
+                        onRequestControl = {},
+                        onResetMachine = {},
+                        onStart = {},
+                        onPause = {},
+                        onStop = {},
+                        onSpeedChange = {},
+                        onInclineChange = {},
+                        modifier = Modifier.padding(innerPadding).padding(16.dp)
+                    )
 
                     AppDestinations.DEVICES -> DevicesScreen(
                         uiState = mockUiState,
@@ -234,7 +251,14 @@ fun TreadmillBridgeApp(
     onStartHrScan: () -> Unit,
     onStopHrScan: () -> Unit,
     onConnectToHrDevice: (String) -> Unit,
-    onDisconnectHrMonitor: () -> Unit
+    onDisconnectHrMonitor: () -> Unit,
+    onRequestControl: () -> Unit,
+    onResetMachine: () -> Unit,
+    onStartOrResume: () -> Unit,
+    onPauseMachine: () -> Unit,
+    onStopMachine: () -> Unit,
+    onSetTargetSpeed: (Float) -> Unit,
+    onSetTargetInclination: (Float) -> Unit
 ) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.DASHBOARD) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -244,8 +268,20 @@ fun TreadmillBridgeApp(
         uiState.machineStatusMessage?.let { statusMessage ->
             snackbarHostState.showSnackbar(
                 message = statusMessage.status.humanReadableMessage,
-                duration = SnackbarDuration.Short // 5 seconds
+                duration = SnackbarDuration.Short
             )
+        }
+    }
+
+    // Show Snackbar on control point errors (not success)
+    LaunchedEffect(uiState.controlPointResponse) {
+        uiState.controlPointResponse?.let { response ->
+            if (!response.response.isSuccess) {
+                snackbarHostState.showSnackbar(
+                    message = response.response.humanReadableMessage,
+                    duration = SnackbarDuration.Short
+                )
+            }
         }
     }
 
@@ -281,7 +317,17 @@ fun TreadmillBridgeApp(
                             .padding(bottom = 120.dp) // Make room for status panel
                     )
 
-                    AppDestinations.CONTROL -> ControlScreen(modifier = Modifier.padding(innerPadding).padding(16.dp))
+                    AppDestinations.CONTROL -> ControlScreen(
+                        uiState = uiState,
+                        onRequestControl = onRequestControl,
+                        onResetMachine = onResetMachine,
+                        onStart = onStartOrResume,
+                        onPause = onPauseMachine,
+                        onStop = onStopMachine,
+                        onSpeedChange = onSetTargetSpeed,
+                        onInclineChange = onSetTargetInclination,
+                        modifier = Modifier.padding(innerPadding).padding(16.dp)
+                    )
 
                     AppDestinations.DEVICES -> DevicesScreen(
                         uiState = uiState,

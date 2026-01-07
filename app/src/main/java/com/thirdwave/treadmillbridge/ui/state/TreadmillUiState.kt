@@ -1,6 +1,9 @@
 package com.thirdwave.treadmillbridge.ui.state
 
+import com.thirdwave.treadmillbridge.ble.InclineRange
+import com.thirdwave.treadmillbridge.ble.SpeedRange
 import com.thirdwave.treadmillbridge.data.model.ConnectionState
+import com.thirdwave.treadmillbridge.data.model.ControlPointResponseMessage
 import com.thirdwave.treadmillbridge.data.model.DiscoveredDevice
 import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
@@ -24,6 +27,9 @@ data class TreadmillUiState(
     val gattServerState: GattServerState = GattServerState.Stopped,
     val discoveryState: DiscoveryState = DiscoveryState(),
     val machineStatusMessage: MachineStatusMessage? = null,
+    val controlPointResponse: ControlPointResponseMessage? = null,
+    val speedRange: SpeedRange = SpeedRange(),
+    val inclineRange: InclineRange = InclineRange(),
     val permissionsGranted: Boolean = false,
 
     // HR Monitor state
@@ -51,4 +57,22 @@ data class TreadmillUiState(
                 it.name == connected.deviceName || it.address == connected.deviceName
             }
         }
+
+    /**
+     * Whether the treadmill is connected.
+     */
+    val isConnected: Boolean
+        get() = connectionState is ConnectionState.Connected
+
+    /**
+     * Whether speed target setting is supported by the connected treadmill.
+     */
+    val supportsSpeedControl: Boolean
+        get() = targetSettingFeatures?.speedTargetSettingSupported == true
+
+    /**
+     * Whether incline target setting is supported by the connected treadmill.
+     */
+    val supportsInclineControl: Boolean
+        get() = targetSettingFeatures?.inclinationTargetSettingSupported == true
 }

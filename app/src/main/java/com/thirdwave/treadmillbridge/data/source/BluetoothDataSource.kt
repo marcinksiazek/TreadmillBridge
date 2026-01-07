@@ -1,7 +1,11 @@
 package com.thirdwave.treadmillbridge.data.source
 
 import android.util.Log
+import com.thirdwave.treadmillbridge.ble.FTMSControlPointCommand
+import com.thirdwave.treadmillbridge.ble.InclineRange
+import com.thirdwave.treadmillbridge.ble.SpeedRange
 import com.thirdwave.treadmillbridge.data.model.ConnectionState
+import com.thirdwave.treadmillbridge.data.model.ControlPointResponseMessage
 import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
 import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
@@ -45,6 +49,9 @@ class BluetoothDataSource @Inject constructor(
     private val _gattServerState = MutableStateFlow<GattServerState>(GattServerState.Stopped)
     private val _discoveryState = MutableStateFlow(DiscoveryState())
     private val _machineStatusMessage = MutableStateFlow<MachineStatusMessage?>(null)
+    private val _controlPointResponse = MutableStateFlow<ControlPointResponseMessage?>(null)
+    private val _speedRange = MutableStateFlow(SpeedRange.default())
+    private val _inclineRange = MutableStateFlow(InclineRange.default())
 
     // Mutable state holders (private) - HR Monitor
     private val _hrMetrics = MutableStateFlow(HrMonitorMetrics())
@@ -59,6 +66,9 @@ class BluetoothDataSource @Inject constructor(
     val gattServerState: StateFlow<GattServerState> = _gattServerState.asStateFlow()
     val discoveryState: StateFlow<DiscoveryState> = _discoveryState.asStateFlow()
     val machineStatusMessage: StateFlow<MachineStatusMessage?> = _machineStatusMessage.asStateFlow()
+    val controlPointResponse: StateFlow<ControlPointResponseMessage?> = _controlPointResponse.asStateFlow()
+    val speedRange: StateFlow<SpeedRange> = _speedRange.asStateFlow()
+    val inclineRange: StateFlow<InclineRange> = _inclineRange.asStateFlow()
 
     // Public read-only StateFlows - HR Monitor
     val hrMetrics: StateFlow<HrMonitorMetrics> = _hrMetrics.asStateFlow()
@@ -84,6 +94,9 @@ class BluetoothDataSource @Inject constructor(
                     _treadmillFeatures.value = null
                     _targetSettingFeatures.value = null
                     _machineStatusMessage.value = null
+                    _controlPointResponse.value = null
+                    _speedRange.value = SpeedRange.default()
+                    _inclineRange.value = InclineRange.default()
                     ConnectionState.Disconnected
                 }
             }
@@ -106,7 +119,28 @@ class BluetoothDataSource @Inject constructor(
                 Log.d(TAG, "Machine status: ${status.humanReadableMessage}")
             }
         }
-        
+
+        treadmillBleManager.onControlPointResponse = { response ->
+            scope.launch {
+                _controlPointResponse.value = ControlPointResponseMessage(response)
+                Log.d(TAG, "Control point response: ${response.humanReadableMessage}")
+            }
+        }
+
+        treadmillBleManager.onSpeedRangeReceived = { range ->
+            scope.launch {
+                _speedRange.value = range
+                Log.d(TAG, "Speed range: ${range.minKmh}-${range.maxKmh} km/h, step ${range.stepKmh}")
+            }
+        }
+
+        treadmillBleManager.onInclineRangeReceived = { range ->
+            scope.launch {
+                _inclineRange.value = range
+                Log.d(TAG, "Incline range: ${range.minPercent}-${range.maxPercent}%, step ${range.stepPercent}")
+            }
+        }
+
         treadmillBleManager.onMetricsReceived = { ftmsData ->
             scope.launch {
                 _treadmillMetrics.value = TreadmillMetrics(
@@ -236,6 +270,9 @@ class BluetoothDataSource @Inject constructor(
         _treadmillFeatures.value = null // Reset features
         _targetSettingFeatures.value = null // Reset target setting features
         _machineStatusMessage.value = null // Reset status message
+        _controlPointResponse.value = null // Reset control point response
+        _speedRange.value = SpeedRange.default() // Reset to default speed range
+        _inclineRange.value = InclineRange.default() // Reset to default incline range
         Log.i(TAG, "Disconnected from treadmill")
     }
     
@@ -273,6 +310,61 @@ class BluetoothDataSource @Inject constructor(
         hrMonitorBleManager.disconnect()
         _hrMetrics.value = HrMonitorMetrics()
         Log.i(TAG, "Disconnected from HR monitor")
+    }
+
+    // Control Point commands
+    suspend fun requestControl(): Boolean = withContext(ioDispatcher) {
+        val result = treadmillBleManager.writeControlPoint(FTMSControlPointCommand.requestControl())
+        Log.i(TAG, "Request control: ${if (result) "sent" else "failed"}")
+        result
+    }
+
+    suspend fun resetMachine(): Boolean = withContext(ioDispatcher) {
+        val result = treadmillBleManager.writeControlPoint(FTMSControlPointCommand.reset())
+        Log.i(TAG, "Reset: ${if (result) "sent" else "failed"}")
+        result
+    }
+
+    suspend fun setTargetSpeed(speedKmh: Float): Boolean = withContext(ioDispatcher) {
+        val result = treadmillBleManager.writeControlPoint(FTMSControlPointCommand.setTargetSpeed(speedKmh))
+        Log.i(TAG, "Set target speed $speedKmh km/h: ${if (result) "sent" else "failed"}")
+        result
+    }
+
+    suspend fun setTargetInclination(inclinePercent: Float): Boolean = withContext(ioDispatcher) {
+        val result = treadmillBleManager.writeControlPoint(FTMSControlPointCommand.setTargetInclination(inclinePercent))
+        Log.i(TAG, "Set target incline $inclinePercent%: ${if (result) "sent" else "failed"}")
+        result
+    }
+
+    suspend fun startOrResume(): Boolean = withContext(ioDispatcher) {
+        val result = treadmillBleManager.writeControlPoint(FTMSControlPointCommand.startOrResume())
+        Log.i(TAG, "Start/Resume: ${if (result) "sent" else "failed"}")
+        result
+    }
+
+    suspend fun stopMachine(): Boolean = withContext(ioDispatcher) {
+        val result = treadmillBleManager.writeControlPoint(FTMSControlPointCommand.stopOrPause(pause = false))
+        Log.i(TAG, "Stop: ${if (result) "sent" else "failed"}")
+        result
+    }
+
+    suspend fun pauseMachine(): Boolean = withContext(ioDispatcher) {
+        val result = treadmillBleManager.writeControlPoint(FTMSControlPointCommand.stopOrPause(pause = true))
+        Log.i(TAG, "Pause: ${if (result) "sent" else "failed"}")
+        result
+    }
+
+    suspend fun setTargetedDistance(distanceMeters: Int): Boolean = withContext(ioDispatcher) {
+        val result = treadmillBleManager.writeControlPoint(FTMSControlPointCommand.setTargetedDistance(distanceMeters))
+        Log.i(TAG, "Set targeted distance $distanceMeters m: ${if (result) "sent" else "failed"}")
+        result
+    }
+
+    suspend fun setTargetedTrainingTime(timeSeconds: Int): Boolean = withContext(ioDispatcher) {
+        val result = treadmillBleManager.writeControlPoint(FTMSControlPointCommand.setTargetedTrainingTime(timeSeconds))
+        Log.i(TAG, "Set targeted time $timeSeconds s: ${if (result) "sent" else "failed"}")
+        result
     }
 
     suspend fun cleanup() = withContext(ioDispatcher) {
