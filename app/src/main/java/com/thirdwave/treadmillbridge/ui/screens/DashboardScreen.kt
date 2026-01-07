@@ -42,7 +42,8 @@ fun DashboardScreen(
         MetricItem("Speed", String.format(Locale.getDefault(), "%.1f", uiState.metrics.speedKph), "km/h"),
         MetricItem("Pace", uiState.metrics.paceString ?: "--", "min/km"),
         MetricItem("Incline", String.format(Locale.getDefault(), "%.1f", uiState.metrics.inclinePercent), "%"),
-        MetricItem("Cadence", uiState.metrics.cadence.toString(), "spm")
+        MetricItem("Cadence", uiState.metrics.cadence.toString(), "spm"),
+        MetricItem("Heart Rate", if (uiState.hrMetrics.heartRateBpm > 0) uiState.hrMetrics.heartRateBpm.toString() else "--", "bpm")
     )
 
     LazyVerticalGrid(
@@ -110,6 +111,7 @@ private fun MetricCard(name: String, value: String, unit: String, modifier: Modi
 fun DashboardScreenPreview_Landscape() {
     val mockState = TreadmillUiState(
         metrics = TreadmillMetrics(speedKph = 15.2f, inclinePercent = 0.0f, cadence = 160),
+        hrMetrics = com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics(heartRateBpm = 145),
         permissionsGranted = true
     )
 
@@ -123,6 +125,7 @@ fun DashboardScreenPreview_Landscape() {
 fun DashboardScreenPreview_Portrait() {
     val mockState = TreadmillUiState(
         metrics = TreadmillMetrics(speedKph = 9.8f, inclinePercent = 1.5f, cadence = 140),
+        hrMetrics = com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics(heartRateBpm = 132),
         permissionsGranted = true
     )
 
