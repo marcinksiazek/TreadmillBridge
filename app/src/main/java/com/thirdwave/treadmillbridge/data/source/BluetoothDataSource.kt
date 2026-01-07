@@ -2,6 +2,8 @@ package com.thirdwave.treadmillbridge.data.source
 
 import android.util.Log
 import com.thirdwave.treadmillbridge.ble.FTMSControlPointCommand
+import com.thirdwave.treadmillbridge.ble.FTMSControlPointOpcode
+import com.thirdwave.treadmillbridge.ble.FTMSMachineStatus
 import com.thirdwave.treadmillbridge.ble.InclineRange
 import com.thirdwave.treadmillbridge.ble.SpeedRange
 import com.thirdwave.treadmillbridge.data.model.ConnectionState
@@ -12,8 +14,10 @@ import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
 import com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics
 import com.thirdwave.treadmillbridge.data.model.MachineStatusMessage
 import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
+import com.thirdwave.treadmillbridge.data.model.TreadmillControlState
 import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
+import com.thirdwave.treadmillbridge.data.model.TreadmillRunningState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +56,8 @@ class BluetoothDataSource @Inject constructor(
     private val _controlPointResponse = MutableStateFlow<ControlPointResponseMessage?>(null)
     private val _speedRange = MutableStateFlow(SpeedRange.default())
     private val _inclineRange = MutableStateFlow(InclineRange.default())
+    private val _controlState = MutableStateFlow<TreadmillControlState>(TreadmillControlState.NotControlling)
+    private val _runningState = MutableStateFlow<TreadmillRunningState>(TreadmillRunningState.Unknown)
 
     // Mutable state holders (private) - HR Monitor
     private val _hrMetrics = MutableStateFlow(HrMonitorMetrics())
@@ -69,6 +75,8 @@ class BluetoothDataSource @Inject constructor(
     val controlPointResponse: StateFlow<ControlPointResponseMessage?> = _controlPointResponse.asStateFlow()
     val speedRange: StateFlow<SpeedRange> = _speedRange.asStateFlow()
     val inclineRange: StateFlow<InclineRange> = _inclineRange.asStateFlow()
+    val controlState: StateFlow<TreadmillControlState> = _controlState.asStateFlow()
+    val runningState: StateFlow<TreadmillRunningState> = _runningState.asStateFlow()
 
     // Public read-only StateFlows - HR Monitor
     val hrMetrics: StateFlow<HrMonitorMetrics> = _hrMetrics.asStateFlow()
@@ -89,7 +97,7 @@ class BluetoothDataSource @Inject constructor(
                 _connectionState.value = if (connected) {
                     ConnectionState.Connected(deviceName ?: "Unknown")
                 } else {
-                    // Reset metrics, features, and status on disconnect
+                    // Reset ALL state on disconnect including control state
                     _treadmillMetrics.value = TreadmillMetrics()
                     _treadmillFeatures.value = null
                     _targetSettingFeatures.value = null
@@ -97,6 +105,8 @@ class BluetoothDataSource @Inject constructor(
                     _controlPointResponse.value = null
                     _speedRange.value = SpeedRange.default()
                     _inclineRange.value = InclineRange.default()
+                    _controlState.value = TreadmillControlState.NotControlling
+                    _runningState.value = TreadmillRunningState.Unknown
                     ConnectionState.Disconnected
                 }
             }
@@ -117,6 +127,54 @@ class BluetoothDataSource @Inject constructor(
             scope.launch {
                 _machineStatusMessage.value = MachineStatusMessage(status)
                 Log.d(TAG, "Machine status: ${status.humanReadableMessage}")
+
+                // Update running state and control state based on machine status
+                when (status) {
+                    is FTMSMachineStatus.Reset -> {
+                        _runningState.value = TreadmillRunningState.Stopped
+                        Log.d(TAG, "Running state: Stopped (reset)")
+                    }
+                    is FTMSMachineStatus.StoppedOrPaused -> {
+                        when (status) {
+                            is FTMSMachineStatus.StoppedOrPaused.PausedByUser -> {
+                                _runningState.value = TreadmillRunningState.Paused
+                                Log.d(TAG, "Running state: Paused")
+                            }
+                            is FTMSMachineStatus.StoppedOrPaused.StoppedByEmergencyStop,
+                            is FTMSMachineStatus.StoppedOrPaused.StoppedBySafetyKey,
+                            is FTMSMachineStatus.StoppedOrPaused.StoppedByError -> {
+                                // Emergency/safety/error stops also revoke control
+                                _runningState.value = TreadmillRunningState.Stopped
+                                _controlState.value = TreadmillControlState.NotControlling
+                                Log.d(TAG, "Running state: Stopped (emergency/safety/error) - control revoked")
+                            }
+                            else -> {
+                                // Normal stop by user
+                                _runningState.value = TreadmillRunningState.Stopped
+                                Log.d(TAG, "Running state: Stopped")
+                            }
+                        }
+                    }
+                    is FTMSMachineStatus.StartedOrResumed -> {
+                        // This is the ONLY trigger for Running state (0x02)
+                        _runningState.value = TreadmillRunningState.Running
+                        Log.d(TAG, "Running state: Running (from 0x02)")
+                    }
+                    is FTMSMachineStatus.SpinDownStarted -> {
+                        // Spin down is an emergency stop scenario
+                        _runningState.value = TreadmillRunningState.Stopped
+                        _controlState.value = TreadmillControlState.NotControlling
+                        Log.d(TAG, "Running state: Stopped (spin down) - control revoked")
+                    }
+                    is FTMSMachineStatus.ControlPermissionLost -> {
+                        // Always revoke control when permission lost (0x12)
+                        _controlState.value = TreadmillControlState.NotControlling
+                        Log.d(TAG, "Control revoked: ${status.humanReadableMessage}")
+                    }
+                    else -> {
+                        // Other status messages (target changes, etc.) don't affect control/running state
+                    }
+                }
             }
         }
 
@@ -124,6 +182,17 @@ class BluetoothDataSource @Inject constructor(
             scope.launch {
                 _controlPointResponse.value = ControlPointResponseMessage(response)
                 Log.d(TAG, "Control point response: ${response.humanReadableMessage}")
+
+                // Track control state based on Request Control response
+                if (response.requestedOpcode == FTMSControlPointOpcode.REQUEST_CONTROL) {
+                    if (response.isSuccess) {
+                        _controlState.value = TreadmillControlState.Controlling
+                        Log.d(TAG, "Control granted")
+                    } else {
+                        _controlState.value = TreadmillControlState.NotControlling
+                        Log.d(TAG, "Control denied: ${response.humanReadableMessage}")
+                    }
+                }
             }
         }
 
@@ -273,6 +342,8 @@ class BluetoothDataSource @Inject constructor(
         _controlPointResponse.value = null // Reset control point response
         _speedRange.value = SpeedRange.default() // Reset to default speed range
         _inclineRange.value = InclineRange.default() // Reset to default incline range
+        _controlState.value = TreadmillControlState.NotControlling // Reset control state
+        _runningState.value = TreadmillRunningState.Unknown // Reset running state
         Log.i(TAG, "Disconnected from treadmill")
     }
     

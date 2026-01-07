@@ -8,8 +8,10 @@ import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
 import com.thirdwave.treadmillbridge.data.model.MachineStatusMessage
 import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
+import com.thirdwave.treadmillbridge.data.model.TreadmillControlState
 import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
+import com.thirdwave.treadmillbridge.data.model.TreadmillRunningState
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -28,6 +30,8 @@ interface TreadmillRepository {
     val controlPointResponse: StateFlow<ControlPointResponseMessage?>
     val speedRange: StateFlow<SpeedRange>
     val inclineRange: StateFlow<InclineRange>
+    val controlState: StateFlow<TreadmillControlState>
+    val runningState: StateFlow<TreadmillRunningState>
 
     // Actions (suspend functions for one-shot operations)
     suspend fun startScan()

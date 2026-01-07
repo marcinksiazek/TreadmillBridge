@@ -10,9 +10,12 @@ import com.thirdwave.treadmillbridge.data.model.GattServerState
 import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
 import com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics
 import com.thirdwave.treadmillbridge.data.model.MachineStatusMessage
+import com.thirdwave.treadmillbridge.data.model.ControlTargets
 import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
+import com.thirdwave.treadmillbridge.data.model.TreadmillControlState
 import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
+import com.thirdwave.treadmillbridge.data.model.TreadmillRunningState
 
 /**
  * Root UI state combining all app state.
@@ -35,7 +38,12 @@ data class TreadmillUiState(
     // HR Monitor state
     val hrMetrics: HrMonitorMetrics = HrMonitorMetrics(),
     val hrConnectionState: ConnectionState = ConnectionState.Disconnected,
-    val hrDiscoveryState: HrDiscoveryState = HrDiscoveryState()
+    val hrDiscoveryState: HrDiscoveryState = HrDiscoveryState(),
+
+    // Control state
+    val controlState: TreadmillControlState = TreadmillControlState.NotControlling,
+    val runningState: TreadmillRunningState = TreadmillRunningState.Unknown,
+    val controlTargets: ControlTargets = ControlTargets()
 ) {
     /**
      * Get the connected HR device info if available.
@@ -75,4 +83,32 @@ data class TreadmillUiState(
      */
     val supportsInclineControl: Boolean
         get() = targetSettingFeatures?.inclinationTargetSettingSupported == true
+
+    /**
+     * Whether the app has control permission over the treadmill.
+     */
+    val hasControl: Boolean
+        get() = controlState.hasControl
+
+    /**
+     * Whether control buttons (Play/Pause/Stop) should be enabled.
+     * Requires connection AND control permission.
+     */
+    val controlButtonsEnabled: Boolean
+        get() = isConnected && hasControl
+
+    /**
+     * Whether sliders should be enabled.
+     * Requires connection, control, and Running state.
+     * SAFETY: Sliders are only enabled when the belt is actually running (0x02 received).
+     */
+    val slidersEnabled: Boolean
+        get() = isConnected && hasControl && runningState == TreadmillRunningState.Running
+
+    /**
+     * Whether Request Control button should be enabled.
+     * Only enabled when connected but NOT controlling.
+     */
+    val requestControlEnabled: Boolean
+        get() = isConnected && !hasControl
 }

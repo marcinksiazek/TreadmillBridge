@@ -8,8 +8,10 @@ import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
 import com.thirdwave.treadmillbridge.data.model.MachineStatusMessage
 import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
+import com.thirdwave.treadmillbridge.data.model.TreadmillControlState
 import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
+import com.thirdwave.treadmillbridge.data.model.TreadmillRunningState
 import com.thirdwave.treadmillbridge.data.source.BluetoothDataSource
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
@@ -54,6 +56,12 @@ class TreadmillRepositoryImpl @Inject constructor(
 
     override val inclineRange: StateFlow<InclineRange> =
         bluetoothDataSource.inclineRange
+
+    override val controlState: StateFlow<TreadmillControlState> =
+        bluetoothDataSource.controlState
+
+    override val runningState: StateFlow<TreadmillRunningState> =
+        bluetoothDataSource.runningState
 
     // Delegate actions to data source
     override suspend fun startScan() {
