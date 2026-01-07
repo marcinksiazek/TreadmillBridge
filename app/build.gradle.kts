@@ -54,9 +54,12 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
 
+    // Extended material icons
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
+
     // Nordic BLE library (optional — kept as a dependency placeholder if you want to use Nordic APIs later)
     // Note: for now the manager uses Android native BLE APIs for scanning/connecting to ensure a working baseline.
-    implementation("no.nordicsemi.android:ble:2.4.0")
+    implementation("no.nordicsemi.android:ble:2.11.0")
 
     // Hilt
     implementation("com.google.dagger:hilt-android:2.48")
