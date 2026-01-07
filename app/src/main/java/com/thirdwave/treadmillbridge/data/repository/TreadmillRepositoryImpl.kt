@@ -3,6 +3,8 @@ package com.thirdwave.treadmillbridge.data.repository
 import com.thirdwave.treadmillbridge.data.model.ConnectionState
 import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
+import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
+import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
 import com.thirdwave.treadmillbridge.data.source.BluetoothDataSource
 import kotlinx.coroutines.flow.StateFlow
@@ -19,10 +21,16 @@ class TreadmillRepositoryImpl @Inject constructor(
 ) : TreadmillRepository {
     
     // Expose data source Flows directly
-    override val metrics: StateFlow<TreadmillMetrics> = 
+    override val metrics: StateFlow<TreadmillMetrics> =
         bluetoothDataSource.treadmillMetrics
-    
-    override val connectionState: StateFlow<ConnectionState> = 
+
+    override val features: StateFlow<TreadmillFeatures?> =
+        bluetoothDataSource.treadmillFeatures
+
+    override val targetSettingFeatures: StateFlow<TargetSettingFeatures?> =
+        bluetoothDataSource.targetSettingFeatures
+
+    override val connectionState: StateFlow<ConnectionState> =
         bluetoothDataSource.connectionState
     
     override val gattServerState: StateFlow<GattServerState> = 

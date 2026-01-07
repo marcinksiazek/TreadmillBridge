@@ -6,6 +6,8 @@ import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
 import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
 import com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics
+import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
+import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -36,6 +38,8 @@ class BluetoothDataSource @Inject constructor(
     
     // Mutable state holders (private) - Treadmill
     private val _treadmillMetrics = MutableStateFlow(TreadmillMetrics())
+    private val _treadmillFeatures = MutableStateFlow<TreadmillFeatures?>(null)
+    private val _targetSettingFeatures = MutableStateFlow<TargetSettingFeatures?>(null)
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     private val _gattServerState = MutableStateFlow<GattServerState>(GattServerState.Stopped)
     private val _discoveryState = MutableStateFlow(DiscoveryState())
@@ -47,6 +51,8 @@ class BluetoothDataSource @Inject constructor(
 
     // Public read-only StateFlows - Treadmill
     val treadmillMetrics: StateFlow<TreadmillMetrics> = _treadmillMetrics.asStateFlow()
+    val treadmillFeatures: StateFlow<TreadmillFeatures?> = _treadmillFeatures.asStateFlow()
+    val targetSettingFeatures: StateFlow<TargetSettingFeatures?> = _targetSettingFeatures.asStateFlow()
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
     val gattServerState: StateFlow<GattServerState> = _gattServerState.asStateFlow()
     val discoveryState: StateFlow<DiscoveryState> = _discoveryState.asStateFlow()
@@ -70,9 +76,22 @@ class BluetoothDataSource @Inject constructor(
                 _connectionState.value = if (connected) {
                     ConnectionState.Connected(deviceName ?: "Unknown")
                 } else {
-                    // Reset metrics on disconnect
+                    // Reset metrics and features on disconnect
                     _treadmillMetrics.value = TreadmillMetrics()
+                    _treadmillFeatures.value = null
+                    _targetSettingFeatures.value = null
                     ConnectionState.Disconnected
+                }
+            }
+        }
+
+        treadmillBleManager.onFeaturesReceived = { parsedFeatures ->
+            scope.launch {
+                _treadmillFeatures.value = parsedFeatures.machineFeatures
+                _targetSettingFeatures.value = parsedFeatures.targetSettingFeatures
+                Log.d(TAG, "Machine features received: ${parsedFeatures.machineFeatures.supportedFeatureLabels}")
+                parsedFeatures.targetSettingFeatures?.let {
+                    Log.d(TAG, "Target setting features received: ${it.supportedFeatureLabels}")
                 }
             }
         }
@@ -203,6 +222,8 @@ class BluetoothDataSource @Inject constructor(
     suspend fun disconnectTreadmill() = withContext(ioDispatcher) {
         treadmillBleManager.disconnect()
         _treadmillMetrics.value = TreadmillMetrics() // Reset metrics
+        _treadmillFeatures.value = null // Reset features
+        _targetSettingFeatures.value = null // Reset target setting features
         Log.i(TAG, "Disconnected from treadmill")
     }
     

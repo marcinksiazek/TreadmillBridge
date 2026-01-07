@@ -2,6 +2,8 @@ package com.thirdwave.treadmillbridge.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +39,8 @@ import com.thirdwave.treadmillbridge.data.model.DiscoveredDevice
 import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
 import com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics
+import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
+import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
 import com.thirdwave.treadmillbridge.ui.components.DeviceListItem
 import com.thirdwave.treadmillbridge.ui.state.TreadmillUiState
@@ -48,6 +52,7 @@ import com.thirdwave.treadmillbridge.ui.theme.TreadmillBridgeTheme
  * 2) Treadmill (single connection + feature chips)
  * 3) GATT Server management (start/stop + connected clients list)
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DevicesScreen(
     uiState: TreadmillUiState,
@@ -66,7 +71,6 @@ fun DevicesScreen(
     // Optional override parameters for preview/testing
     connectedTreadmill: DiscoveredDevice? = uiState.connectedTreadmillDevice,
     treadmillRunState: String? = null,
-    treadmillFeatures: List<String> = listOf("Average Speed", "Cadence", "Incline Control"),
     gattConnectedClients: List<String> = emptyList(),
     onDisconnectGattClient: (String) -> Unit = {},
     modifier: Modifier = Modifier
@@ -261,15 +265,43 @@ fun DevicesScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Feature chips
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            treadmillFeatures.take(3).forEach { feature ->
-                                AssistChip(
-                                    onClick = { },
-                                    label = { Text(feature, style = MaterialTheme.typography.labelSmall) },
-                                    enabled = false,
-                                    colors = AssistChipDefaults.assistChipColors()
-                                )
+                        // Machine feature chips from FTMS Feature characteristic
+                        val featureLabels = uiState.treadmillFeatures?.supportedFeatureLabels ?: emptyList()
+                        if (featureLabels.isNotEmpty()) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                featureLabels.forEach { feature ->
+                                    AssistChip(
+                                        onClick = { },
+                                        label = { Text(feature, style = MaterialTheme.typography.labelSmall) },
+                                        enabled = false,
+                                        colors = AssistChipDefaults.assistChipColors()
+                                    )
+                                }
+                            }
+                        }
+
+                        // Target setting feature chips
+                        val targetLabels = uiState.targetSettingFeatures?.supportedFeatureLabels ?: emptyList()
+                        if (targetLabels.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                targetLabels.forEach { feature ->
+                                    AssistChip(
+                                        onClick = { },
+                                        label = { Text(feature, style = MaterialTheme.typography.labelSmall) },
+                                        enabled = false,
+                                        colors = AssistChipDefaults.assistChipColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            labelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    )
+                                }
                             }
                         }
 
@@ -412,6 +444,7 @@ fun DevicesScreen(
 
 // ===== Previews =====
 
+@OptIn(ExperimentalLayoutApi::class)
 @Preview(showBackground = true)
 @Composable
 fun DevicesScreenPreview() {
@@ -427,9 +460,25 @@ fun DevicesScreenPreview() {
         address = "AA:BB:CC:DD:EE:01",
         rssi = -65
     )
+    val mockFeatures = TreadmillFeatures(
+        averageSpeedSupported = true,
+        cadenceSupported = true,
+        totalDistanceSupported = true,
+        inclinationSupported = true,
+        paceSupported = true,
+        elapsedTimeSupported = true
+    )
+    val mockTargetFeatures = TargetSettingFeatures(
+        speedTargetSettingSupported = true,
+        inclinationTargetSettingSupported = true,
+        heartRateTargetSettingSupported = true,
+        targetedDistanceSupported = true
+    )
 
     val mockState = TreadmillUiState(
         metrics = TreadmillMetrics(speedKph = 10.0f, inclinePercent = 2.0f, cadence = 140),
+        treadmillFeatures = mockFeatures,
+        targetSettingFeatures = mockTargetFeatures,
         connectionState = ConnectionState.Connected(deviceName = "NordicTrack T8.5S"),
         discoveryState = DiscoveryState(isScanning = false, discoveredDevices = listOf(mockTreadmill)),
         hrMetrics = HrMonitorMetrics(heartRateBpm = 145, batteryPercent = 88),

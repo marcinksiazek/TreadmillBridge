@@ -16,7 +16,9 @@ import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.thirdwave.treadmillbridge.data.model.DiscoveredDevice
+import com.thirdwave.treadmillbridge.ble.FTMSFeatureData
 import com.thirdwave.treadmillbridge.ble.FTMSTreadmillData
+import com.thirdwave.treadmillbridge.ble.ParsedFTMSFeatures
 import dagger.hilt.android.qualifiers.ApplicationContext
 import no.nordicsemi.android.ble.BleManager
 import java.util.UUID
@@ -44,6 +46,7 @@ class TreadmillBleManager @Inject constructor(
     var onDeviceDiscovered: ((DiscoveredDevice) -> Unit)? = null
     var onConnectionStateChanged: ((Boolean, String?) -> Unit)? = null
     var onMetricsReceived: ((FTMSTreadmillData) -> Unit)? = null
+    var onFeaturesReceived: ((ParsedFTMSFeatures) -> Unit)? = null
     
     private var nordicManager: NordicTreadmillManager? = null
     private var scanner: BluetoothLeScanner? = null
@@ -52,6 +55,7 @@ class TreadmillBleManager @Inject constructor(
     companion object {
         val FTMS_SERVICE_UUID: UUID = UUID.fromString("00001826-0000-1000-8000-00805f9b34fb")
         val FTMS_TREADMILL_DATA_UUID: UUID = UUID.fromString("00002ACD-0000-1000-8000-00805f9b34fb")
+        val FTMS_FEATURE_UUID: UUID = UUID.fromString("00002ACC-0000-1000-8000-00805f9b34fb")
     }
     
     // Permission helper
@@ -65,6 +69,7 @@ class TreadmillBleManager @Inject constructor(
      */
     private inner class NordicTreadmillManager(context: Context) : BleManager(context) {
         private var treadmillDataCharacteristic: BluetoothGattCharacteristic? = null
+        private var featureCharacteristic: BluetoothGattCharacteristic? = null
         
         override fun getMinLogPriority(): Int = Log.VERBOSE
         
@@ -80,24 +85,42 @@ class TreadmillBleManager @Inject constructor(
                         Log.w(TAG, "FTMS service not found")
                         return false
                     }
-                    
+
                     treadmillDataCharacteristic = service.getCharacteristic(FTMS_TREADMILL_DATA_UUID)
                     if (treadmillDataCharacteristic == null) {
                         Log.w(TAG, "Treadmill Data characteristic not found")
                         return false
                     }
-                    
+
                     val properties = treadmillDataCharacteristic?.properties ?: 0
                     val hasNotify = (properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0
                     if (!hasNotify) {
                         Log.w(TAG, "Treadmill Data characteristic does not support notifications")
                         return false
                     }
-                    
+
+                    // Feature characteristic is optional but useful
+                    featureCharacteristic = service.getCharacteristic(FTMS_FEATURE_UUID)
+                    if (featureCharacteristic == null) {
+                        Log.w(TAG, "FTMS Feature characteristic not found (optional)")
+                    }
+
                     return true
                 }
                 
                 override fun initialize() {
+                    // Read feature characteristic once after connection
+                    featureCharacteristic?.let { char ->
+                        readCharacteristic(char).with { _, data ->
+                            val features = FTMSFeatureData.parse(data.value ?: ByteArray(0))
+                            if (features != null) {
+                                onFeaturesReceived?.invoke(features)
+                            } else {
+                                Log.w(TAG, "Failed to parse FTMS features")
+                            }
+                        }.enqueue()
+                    }
+
                     // Subscribe to treadmill data notifications
                     treadmillDataCharacteristic?.let { char ->
                         setNotificationCallback(char).with { _, data ->
@@ -108,13 +131,14 @@ class TreadmillBleManager @Inject constructor(
                                 Log.w(TAG, "Failed to parse FTMS treadmill data")
                             }
                         }
-                        
+
                         enableNotifications(char).enqueue()
                     }
                 }
                 
                 override fun onServicesInvalidated() {
                     treadmillDataCharacteristic = null
+                    featureCharacteristic = null
                 }
             }
         }

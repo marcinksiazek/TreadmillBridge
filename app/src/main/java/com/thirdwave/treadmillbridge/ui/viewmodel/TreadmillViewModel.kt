@@ -7,6 +7,8 @@ import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
 import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
 import com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics
+import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
+import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
 import com.thirdwave.treadmillbridge.data.repository.HrMonitorRepository
 import com.thirdwave.treadmillbridge.data.repository.TreadmillRepository
@@ -35,12 +37,14 @@ class TreadmillViewModel @Inject constructor(
     val uiState: StateFlow<TreadmillUiState> = combine(
         combine(
             repository.metrics,
+            repository.features,
+            repository.targetSettingFeatures,
             repository.connectionState,
-            repository.gattServerState,
-            repository.discoveryState
-        ) { metrics, connection, gattServer, discovery ->
-            TreadmillState(metrics, connection, gattServer, discovery)
+            repository.gattServerState
+        ) { metrics, features, targetFeatures, connection, gattServer ->
+            TreadmillCoreState(metrics, features, targetFeatures, connection, gattServer)
         },
+        repository.discoveryState,
         combine(
             hrRepository.hrMetrics,
             hrRepository.hrConnectionState,
@@ -48,12 +52,14 @@ class TreadmillViewModel @Inject constructor(
         ) { hrMetrics, hrConnection, hrDiscovery ->
             HrState(hrMetrics, hrConnection, hrDiscovery)
         }
-    ) { treadmill, hr ->
+    ) { core, discovery, hr ->
         TreadmillUiState(
-            metrics = treadmill.metrics,
-            connectionState = treadmill.connectionState,
-            gattServerState = treadmill.gattServerState,
-            discoveryState = treadmill.discoveryState,
+            metrics = core.metrics,
+            treadmillFeatures = core.features,
+            targetSettingFeatures = core.targetSettingFeatures,
+            connectionState = core.connectionState,
+            gattServerState = core.gattServerState,
+            discoveryState = discovery,
             permissionsGranted = true,
             hrMetrics = hr.hrMetrics,
             hrConnectionState = hr.hrConnectionState,
@@ -66,11 +72,12 @@ class TreadmillViewModel @Inject constructor(
     )
 
     // Helper data classes for nested combine
-    private data class TreadmillState(
+    private data class TreadmillCoreState(
         val metrics: TreadmillMetrics,
+        val features: TreadmillFeatures?,
+        val targetSettingFeatures: TargetSettingFeatures?,
         val connectionState: ConnectionState,
-        val gattServerState: GattServerState,
-        val discoveryState: DiscoveryState
+        val gattServerState: GattServerState
     )
 
     private data class HrState(
