@@ -1,4 +1,4 @@
-package com.thirdwave.treadmillbridge.ftms
+package com.thirdwave.treadmillbridge.ble
 
 import android.util.Log
 import java.nio.ByteBuffer

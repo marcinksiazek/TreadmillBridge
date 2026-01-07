@@ -33,6 +33,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.thirdwave.treadmillbridge.data.model.ConnectionState
 import com.thirdwave.treadmillbridge.data.model.DiscoveredDevice
+import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
+import com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
 import com.thirdwave.treadmillbridge.ui.components.StatusPanel
 import com.thirdwave.treadmillbridge.ui.screens.ControlScreen
@@ -95,7 +97,11 @@ class MainActivity : ComponentActivity() {
                     onConnectToDevice = viewModel::onConnectToDevice,
                     onDisconnectTreadmill = viewModel::onDisconnectTreadmill,
                     onStartGattServer = viewModel::onStartGattServer,
-                    onStopGattServer = viewModel::onStopGattServer
+                    onStopGattServer = viewModel::onStopGattServer,
+                    onStartHrScan = viewModel::onStartHrScan,
+                    onStopHrScan = viewModel::onStopHrScan,
+                    onConnectToHrDevice = viewModel::onConnectToHrDevice,
+                    onDisconnectHrMonitor = viewModel::onDisconnectHrMonitor
                 )
             }
         }
@@ -192,6 +198,10 @@ private fun PreviewTreadmillBridgeApp() {
                         onDisconnectTreadmill = {},
                         onStartGattServer = {},
                         onStopGattServer = {},
+                        onStartHrScan = {},
+                        onStopHrScan = {},
+                        onConnectToHrDevice = {},
+                        onDisconnectHrMonitor = {},
                         modifier = Modifier.padding(innerPadding).padding(16.dp))
                 }
 
@@ -199,6 +209,8 @@ private fun PreviewTreadmillBridgeApp() {
                 StatusPanel(
                     connectionState = mockUiState.connectionState,
                     gattServerState = mockUiState.gattServerState,
+                    hrConnectionState = mockUiState.hrConnectionState,
+                    hrHeartRate = mockUiState.hrMetrics.heartRateBpm.takeIf { it > 0 },
                     modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
                 )
             }
@@ -214,7 +226,11 @@ fun TreadmillBridgeApp(
     onConnectToDevice: (String) -> Unit,
     onDisconnectTreadmill: () -> Unit,
     onStartGattServer: () -> Unit,
-    onStopGattServer: () -> Unit
+    onStopGattServer: () -> Unit,
+    onStartHrScan: () -> Unit,
+    onStopHrScan: () -> Unit,
+    onConnectToHrDevice: (String) -> Unit,
+    onDisconnectHrMonitor: () -> Unit
 ) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.DASHBOARD) }
 
@@ -257,6 +273,10 @@ fun TreadmillBridgeApp(
                         onDisconnectTreadmill = onDisconnectTreadmill,
                         onStartGattServer = onStartGattServer,
                         onStopGattServer = onStopGattServer,
+                        onStartHrScan = onStartHrScan,
+                        onStopHrScan = onStopHrScan,
+                        onConnectToHrDevice = onConnectToHrDevice,
+                        onDisconnectHrMonitor = onDisconnectHrMonitor,
                         modifier = Modifier.padding(innerPadding).padding(16.dp))
                 }
 
@@ -264,6 +284,8 @@ fun TreadmillBridgeApp(
                 StatusPanel(
                     connectionState = uiState.connectionState,
                     gattServerState = uiState.gattServerState,
+                    hrConnectionState = uiState.hrConnectionState,
+                    hrHeartRate = uiState.hrMetrics.heartRateBpm.takeIf { it > 0 },
                     modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
                 )
             }

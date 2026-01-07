@@ -9,7 +9,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -21,6 +20,8 @@ import com.thirdwave.treadmillbridge.data.model.GattServerState
 fun StatusPanel(
     connectionState: ConnectionState,
     gattServerState: GattServerState,
+    hrConnectionState: ConnectionState = ConnectionState.Disconnected,
+    hrHeartRate: Int? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -41,6 +42,7 @@ fun StatusPanel(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Treadmill status
             val treadmillStatus = when (connectionState) {
                 is ConnectionState.Disconnected -> "Not connected"
                 is ConnectionState.Connecting -> "Connecting..."
@@ -54,6 +56,24 @@ fun StatusPanel(
 
             Spacer(modifier = Modifier.height(4.dp))
 
+            // HR Monitor status
+            val hrStatus = when (hrConnectionState) {
+                is ConnectionState.Disconnected -> "Not connected"
+                is ConnectionState.Connecting -> "Connecting..."
+                is ConnectionState.Connected -> {
+                    val hrText = hrHeartRate?.let { " - $it bpm" } ?: ""
+                    "Connected to ${hrConnectionState.deviceName}$hrText"
+                }
+                is ConnectionState.Failed -> "Failed: ${hrConnectionState.reason}"
+            }
+            Text(
+                text = "HR Monitor: $hrStatus",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // GATT Server status
             val gattStatus = when (gattServerState) {
                 is GattServerState.Stopped -> "Not running"
                 is GattServerState.Starting -> "Starting..."
@@ -71,26 +91,24 @@ fun StatusPanel(
 @Preview(showBackground = true)
 @Composable
 fun StatusPanelPreview() {
-    // Show multiple variations stacked
     Column {
         StatusPanel(
             connectionState = ConnectionState.Disconnected,
-            gattServerState = GattServerState.Stopped
-        )
-
-        StatusPanel(
-            connectionState = ConnectionState.Connecting,
-            gattServerState = GattServerState.Starting
+            gattServerState = GattServerState.Stopped,
+            hrConnectionState = ConnectionState.Disconnected
         )
 
         StatusPanel(
             connectionState = ConnectionState.Connected(deviceName = "Treadmill X"),
-            gattServerState = GattServerState.Running
+            gattServerState = GattServerState.Running,
+            hrConnectionState = ConnectionState.Connected(deviceName = "Polar H10"),
+            hrHeartRate = 145
         )
 
         StatusPanel(
-            connectionState = ConnectionState.Failed(reason = "Timeout"),
-            gattServerState = GattServerState.ClientConnected(clientName = "Phone A")
+            connectionState = ConnectionState.Connecting,
+            gattServerState = GattServerState.Starting,
+            hrConnectionState = ConnectionState.Connecting
         )
     }
 }

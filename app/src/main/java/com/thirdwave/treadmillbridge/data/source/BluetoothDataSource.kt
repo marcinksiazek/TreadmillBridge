@@ -4,6 +4,8 @@ import android.util.Log
 import com.thirdwave.treadmillbridge.data.model.ConnectionState
 import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
+import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
+import com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -25,27 +27,39 @@ import javax.inject.Singleton
 @Singleton
 class BluetoothDataSource @Inject constructor(
     private val treadmillBleManager: TreadmillBleManager,
+    private val hrMonitorBleManager: HrMonitorBleManager,
     private val gattServerManager: GattServerManager,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private val TAG = "BluetoothDataSource"
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     
-    // Mutable state holders (private)
+    // Mutable state holders (private) - Treadmill
     private val _treadmillMetrics = MutableStateFlow(TreadmillMetrics())
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     private val _gattServerState = MutableStateFlow<GattServerState>(GattServerState.Stopped)
     private val _discoveryState = MutableStateFlow(DiscoveryState())
-    
-    // Public read-only StateFlows
+
+    // Mutable state holders (private) - HR Monitor
+    private val _hrMetrics = MutableStateFlow(HrMonitorMetrics())
+    private val _hrConnectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
+    private val _hrDiscoveryState = MutableStateFlow(HrDiscoveryState())
+
+    // Public read-only StateFlows - Treadmill
     val treadmillMetrics: StateFlow<TreadmillMetrics> = _treadmillMetrics.asStateFlow()
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
     val gattServerState: StateFlow<GattServerState> = _gattServerState.asStateFlow()
     val discoveryState: StateFlow<DiscoveryState> = _discoveryState.asStateFlow()
+
+    // Public read-only StateFlows - HR Monitor
+    val hrMetrics: StateFlow<HrMonitorMetrics> = _hrMetrics.asStateFlow()
+    val hrConnectionState: StateFlow<ConnectionState> = _hrConnectionState.asStateFlow()
+    val hrDiscoveryState: StateFlow<HrDiscoveryState> = _hrDiscoveryState.asStateFlow()
     
     init {
         // Set up callbacks from BLE managers → StateFlow updates
         setupTreadmillCallbacks()
+        setupHrMonitorCallbacks()
         setupGattServerCallbacks()
         setupMetricsSync()
     }
@@ -86,7 +100,51 @@ class BluetoothDataSource @Inject constructor(
             }
         }
     }
-    
+
+    private fun setupHrMonitorCallbacks() {
+        hrMonitorBleManager.onConnectionStateChanged = { connected, deviceName ->
+            scope.launch {
+                _hrConnectionState.value = if (connected) {
+                    ConnectionState.Connected(deviceName ?: "Unknown HR")
+                } else {
+                    // Reset metrics on disconnect
+                    _hrMetrics.value = HrMonitorMetrics()
+                    ConnectionState.Disconnected
+                }
+            }
+        }
+
+        hrMonitorBleManager.onHeartRateReceived = { hrData ->
+            scope.launch {
+                _hrMetrics.value = _hrMetrics.value.copy(
+                    heartRateBpm = hrData.heartRateBpm,
+                    sensorContact = hrData.sensorContactDetected,
+                    rrIntervals = hrData.rrIntervalsMs
+                )
+                Log.d(TAG, "HR updated: ${hrData.heartRateBpm} bpm")
+            }
+        }
+
+        hrMonitorBleManager.onBatteryLevelReceived = { level ->
+            scope.launch {
+                _hrMetrics.value = _hrMetrics.value.copy(batteryPercent = level)
+                Log.d(TAG, "HR battery: $level%")
+            }
+        }
+
+        hrMonitorBleManager.onDeviceDiscovered = { device ->
+            scope.launch {
+                val current = _hrDiscoveryState.value
+                if (current.discoveredDevices.none { it.address == device.address }) {
+                    _hrDiscoveryState.value = current.copy(
+                        discoveredDevices = current.discoveredDevices + device
+                    )
+                    Log.d(TAG, "HR device discovered: ${device.name} (${device.address})")
+                }
+            }
+        }
+    }
+
     private fun setupGattServerCallbacks() {
         gattServerManager.onServerStateChanged = { running ->
             scope.launch {
@@ -158,9 +216,35 @@ class BluetoothDataSource @Inject constructor(
         gattServerManager.stop()
         Log.i(TAG, "Stopped GATT server")
     }
-    
+
+    // HR Monitor actions
+    suspend fun startHrScan() = withContext(ioDispatcher) {
+        _hrDiscoveryState.value = HrDiscoveryState(isScanning = true, discoveredDevices = emptyList())
+        hrMonitorBleManager.startScan()
+        Log.i(TAG, "Started HR scan")
+    }
+
+    suspend fun stopHrScan() = withContext(ioDispatcher) {
+        hrMonitorBleManager.stopScan()
+        _hrDiscoveryState.value = _hrDiscoveryState.value.copy(isScanning = false)
+        Log.i(TAG, "Stopped HR scan")
+    }
+
+    suspend fun connectToHrMonitor(address: String) = withContext(ioDispatcher) {
+        _hrConnectionState.value = ConnectionState.Connecting
+        hrMonitorBleManager.connectToDevice(address)
+        Log.i(TAG, "Connecting to HR monitor: $address")
+    }
+
+    suspend fun disconnectHrMonitor() = withContext(ioDispatcher) {
+        hrMonitorBleManager.disconnect()
+        _hrMetrics.value = HrMonitorMetrics()
+        Log.i(TAG, "Disconnected from HR monitor")
+    }
+
     suspend fun cleanup() = withContext(ioDispatcher) {
         treadmillBleManager.cleanup()
+        hrMonitorBleManager.cleanup()
         gattServerManager.cleanup()
         Log.i(TAG, "Cleaned up BLE resources")
     }

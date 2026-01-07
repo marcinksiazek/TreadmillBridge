@@ -15,7 +15,7 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
-import com.thirdwave.treadmillbridge.ftms.FTMSTreadmillData
+import com.thirdwave.treadmillbridge.ble.FTMSTreadmillData
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.UUID
 import javax.inject.Inject
