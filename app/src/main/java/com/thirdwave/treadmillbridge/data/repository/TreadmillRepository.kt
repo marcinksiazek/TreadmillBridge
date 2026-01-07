@@ -3,6 +3,7 @@ package com.thirdwave.treadmillbridge.data.repository
 import com.thirdwave.treadmillbridge.data.model.ConnectionState
 import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
+import com.thirdwave.treadmillbridge.data.model.MachineStatusMessage
 import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
@@ -20,6 +21,7 @@ interface TreadmillRepository {
     val connectionState: StateFlow<ConnectionState>
     val gattServerState: StateFlow<GattServerState>
     val discoveryState: StateFlow<DiscoveryState>
+    val machineStatusMessage: StateFlow<MachineStatusMessage?>
     
     // Actions (suspend functions for one-shot operations)
     suspend fun startScan()

@@ -7,6 +7,7 @@ import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
 import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
 import com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics
+import com.thirdwave.treadmillbridge.data.model.MachineStatusMessage
 import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
@@ -44,7 +45,12 @@ class TreadmillViewModel @Inject constructor(
         ) { metrics, features, targetFeatures, connection, gattServer ->
             TreadmillCoreState(metrics, features, targetFeatures, connection, gattServer)
         },
-        repository.discoveryState,
+        combine(
+            repository.discoveryState,
+            repository.machineStatusMessage
+        ) { discovery, statusMessage ->
+            DiscoveryAndStatusState(discovery, statusMessage)
+        },
         combine(
             hrRepository.hrMetrics,
             hrRepository.hrConnectionState,
@@ -52,14 +58,15 @@ class TreadmillViewModel @Inject constructor(
         ) { hrMetrics, hrConnection, hrDiscovery ->
             HrState(hrMetrics, hrConnection, hrDiscovery)
         }
-    ) { core, discovery, hr ->
+    ) { core, discoveryAndStatus, hr ->
         TreadmillUiState(
             metrics = core.metrics,
             treadmillFeatures = core.features,
             targetSettingFeatures = core.targetSettingFeatures,
             connectionState = core.connectionState,
             gattServerState = core.gattServerState,
-            discoveryState = discovery,
+            discoveryState = discoveryAndStatus.discoveryState,
+            machineStatusMessage = discoveryAndStatus.statusMessage,
             permissionsGranted = true,
             hrMetrics = hr.hrMetrics,
             hrConnectionState = hr.hrConnectionState,
@@ -78,6 +85,11 @@ class TreadmillViewModel @Inject constructor(
         val targetSettingFeatures: TargetSettingFeatures?,
         val connectionState: ConnectionState,
         val gattServerState: GattServerState
+    )
+
+    private data class DiscoveryAndStatusState(
+        val discoveryState: DiscoveryState,
+        val statusMessage: MachineStatusMessage?
     )
 
     private data class HrState(

@@ -16,9 +16,13 @@ import androidx.compose.material.icons.filled.DevicesOther
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -233,6 +237,17 @@ fun TreadmillBridgeApp(
     onDisconnectHrMonitor: () -> Unit
 ) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.DASHBOARD) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show Snackbar when machine status message changes
+    LaunchedEffect(uiState.machineStatusMessage) {
+        uiState.machineStatusMessage?.let { statusMessage ->
+            snackbarHostState.showSnackbar(
+                message = statusMessage.status.humanReadableMessage,
+                duration = SnackbarDuration.Short // 5 seconds
+            )
+        }
+    }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -251,7 +266,10 @@ fun TreadmillBridgeApp(
             }
         }
     ) {
-        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            snackbarHost = { SnackbarHost(snackbarHostState) }
+        ) { innerPadding ->
             Box(modifier = Modifier.fillMaxSize()) {
                 // Render content depending on selected destination
                 when (currentDestination) {

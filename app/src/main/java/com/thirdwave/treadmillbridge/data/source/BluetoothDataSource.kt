@@ -6,6 +6,7 @@ import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
 import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
 import com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics
+import com.thirdwave.treadmillbridge.data.model.MachineStatusMessage
 import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
@@ -43,6 +44,7 @@ class BluetoothDataSource @Inject constructor(
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     private val _gattServerState = MutableStateFlow<GattServerState>(GattServerState.Stopped)
     private val _discoveryState = MutableStateFlow(DiscoveryState())
+    private val _machineStatusMessage = MutableStateFlow<MachineStatusMessage?>(null)
 
     // Mutable state holders (private) - HR Monitor
     private val _hrMetrics = MutableStateFlow(HrMonitorMetrics())
@@ -56,6 +58,7 @@ class BluetoothDataSource @Inject constructor(
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
     val gattServerState: StateFlow<GattServerState> = _gattServerState.asStateFlow()
     val discoveryState: StateFlow<DiscoveryState> = _discoveryState.asStateFlow()
+    val machineStatusMessage: StateFlow<MachineStatusMessage?> = _machineStatusMessage.asStateFlow()
 
     // Public read-only StateFlows - HR Monitor
     val hrMetrics: StateFlow<HrMonitorMetrics> = _hrMetrics.asStateFlow()
@@ -76,10 +79,11 @@ class BluetoothDataSource @Inject constructor(
                 _connectionState.value = if (connected) {
                     ConnectionState.Connected(deviceName ?: "Unknown")
                 } else {
-                    // Reset metrics and features on disconnect
+                    // Reset metrics, features, and status on disconnect
                     _treadmillMetrics.value = TreadmillMetrics()
                     _treadmillFeatures.value = null
                     _targetSettingFeatures.value = null
+                    _machineStatusMessage.value = null
                     ConnectionState.Disconnected
                 }
             }
@@ -93,6 +97,13 @@ class BluetoothDataSource @Inject constructor(
                 parsedFeatures.targetSettingFeatures?.let {
                     Log.d(TAG, "Target setting features received: ${it.supportedFeatureLabels}")
                 }
+            }
+        }
+
+        treadmillBleManager.onMachineStatusReceived = { status ->
+            scope.launch {
+                _machineStatusMessage.value = MachineStatusMessage(status)
+                Log.d(TAG, "Machine status: ${status.humanReadableMessage}")
             }
         }
         
@@ -224,6 +235,7 @@ class BluetoothDataSource @Inject constructor(
         _treadmillMetrics.value = TreadmillMetrics() // Reset metrics
         _treadmillFeatures.value = null // Reset features
         _targetSettingFeatures.value = null // Reset target setting features
+        _machineStatusMessage.value = null // Reset status message
         Log.i(TAG, "Disconnected from treadmill")
     }
     

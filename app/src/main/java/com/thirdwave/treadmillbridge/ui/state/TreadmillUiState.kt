@@ -6,6 +6,7 @@ import com.thirdwave.treadmillbridge.data.model.DiscoveryState
 import com.thirdwave.treadmillbridge.data.model.GattServerState
 import com.thirdwave.treadmillbridge.data.model.HrDiscoveryState
 import com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics
+import com.thirdwave.treadmillbridge.data.model.MachineStatusMessage
 import com.thirdwave.treadmillbridge.data.model.TargetSettingFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillFeatures
 import com.thirdwave.treadmillbridge.data.model.TreadmillMetrics
@@ -22,6 +23,7 @@ data class TreadmillUiState(
     val connectionState: ConnectionState = ConnectionState.Disconnected,
     val gattServerState: GattServerState = GattServerState.Stopped,
     val discoveryState: DiscoveryState = DiscoveryState(),
+    val machineStatusMessage: MachineStatusMessage? = null,
     val permissionsGranted: Boolean = false,
 
     // HR Monitor state
