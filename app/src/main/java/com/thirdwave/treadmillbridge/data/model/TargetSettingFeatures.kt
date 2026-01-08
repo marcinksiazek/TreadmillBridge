@@ -18,7 +18,10 @@ data class TargetSettingFeatures(
     val targetedTimeInTwoHrZonesSupported: Boolean = false,
     val targetedTimeInThreeHrZonesSupported: Boolean = false,
     val targetedTimeInFiveHrZonesSupported: Boolean = false,
-    val indoorBikeSimulationSupported: Boolean = false
+    val indoorBikeSimulationSupported: Boolean = false,
+    val wheelCircumferenceConfigurationSupported: Boolean = false,
+    val spinDownControlSupported: Boolean = false,
+    val targetedCadenceConfigurationSupported: Boolean = false
 ) {
     /**
      * List of human-readable labels for supported target setting features.
@@ -36,9 +39,12 @@ data class TargetSettingFeatures(
             if (targetedStrideNumberSupported) add("Stride Target")
             if (targetedDistanceSupported) add("Distance Target")
             if (targetedTrainingTimeSupported) add("Time Target")
-            if (targetedTimeInTwoHrZonesSupported) add("2 HR Zones")
-            if (targetedTimeInThreeHrZonesSupported) add("3 HR Zones")
-            if (targetedTimeInFiveHrZonesSupported) add("5 HR Zones")
+            if (targetedTimeInTwoHrZonesSupported) add("Time in Z2")
+            if (targetedTimeInThreeHrZonesSupported) add("Time in Z3")
+            if (targetedTimeInFiveHrZonesSupported) add("Time in Z5")
             if (indoorBikeSimulationSupported) add("Bike Simulation")
+            if (wheelCircumferenceConfigurationSupported) add("Wheel Circumference")
+            if (spinDownControlSupported) add("Spin Down")
+            if (targetedCadenceConfigurationSupported) add("Cadence Target")
         }
 }

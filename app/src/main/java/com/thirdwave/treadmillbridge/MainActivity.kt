@@ -225,15 +225,6 @@ private fun PreviewTreadmillBridgeApp() {
                         onDisconnectHrMonitor = {},
                         modifier = Modifier.padding(innerPadding).padding(16.dp))
                 }
-
-                // Status panel at bottom
-                StatusPanel(
-                    connectionState = mockUiState.connectionState,
-                    gattServerState = mockUiState.gattServerState,
-                    hrConnectionState = mockUiState.hrConnectionState,
-                    hrHeartRate = mockUiState.hrMetrics.heartRateBpm.takeIf { it > 0 },
-                    modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
-                )
             }
         }
     }
@@ -343,15 +334,6 @@ fun TreadmillBridgeApp(
                         onDisconnectHrMonitor = onDisconnectHrMonitor,
                         modifier = Modifier.padding(innerPadding).padding(16.dp))
                 }
-
-                // Status panel at bottom
-                StatusPanel(
-                    connectionState = uiState.connectionState,
-                    gattServerState = uiState.gattServerState,
-                    hrConnectionState = uiState.hrConnectionState,
-                    hrHeartRate = uiState.hrMetrics.heartRateBpm.takeIf { it > 0 },
-                    modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
-                )
             }
         }
     }

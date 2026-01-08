@@ -24,7 +24,7 @@ data class ParsedFTMSFeatures(
 object FTMSFeatureData {
     private const val TAG = "FTMSFeatureParser"
 
-    // Fitness Machine Feature bits (0-15)
+    // Fitness Machine Feature bits (0-16)
     private const val FEATURE_AVERAGE_SPEED = 0x0001
     private const val FEATURE_CADENCE = 0x0002
     private const val FEATURE_TOTAL_DISTANCE = 0x0004
@@ -41,6 +41,7 @@ object FTMSFeatureData {
     private const val FEATURE_REMAINING_TIME = 0x2000
     private const val FEATURE_POWER_MEASUREMENT = 0x4000
     private const val FEATURE_FORCE_ON_BELT_AND_POWER_OUTPUT = 0x8000
+    private const val FEATURE_USER_DATA_RETENTION = 0x10000
 
     // Target Setting Feature bits (0-13)
     private const val TARGET_SPEED_SETTING = 0x0001
@@ -57,6 +58,10 @@ object FTMSFeatureData {
     private const val TARGET_TIME_IN_THREE_HR_ZONES = 0x0800
     private const val TARGET_TIME_IN_FIVE_HR_ZONES = 0x1000
     private const val TARGET_INDOOR_BIKE_SIMULATION = 0x2000
+    private const val TARGET_WHEEL_CIRCUMFERENCE_CONFIGURATION = 0x4000
+    private const val TARGET_SPIN_DOWN_CONTROL = 0x8000
+    private const val TARGET_TARGETED_CADENCE_CONFIGURATION = 0x10000
+
 
     /**
      * Parse FTMS Fitness Machine Feature characteristic value.
@@ -78,8 +83,8 @@ object FTMSFeatureData {
         return try {
             val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
 
-            // Read first 4 bytes as uint32, but we only care about bits 0-15
-            val machineFeatureBits = buffer.int and 0xFFFF
+            // Read first 4 bytes as uint32, but we only care about bits 0-16
+            val machineFeatureBits = buffer.int and 0x1FFFF // zero unused bits
             Log.d(TAG, "Machine Features: 0x${machineFeatureBits.toString(16).padStart(4, '0')}")
 
             val machineFeatures = TreadmillFeatures(
@@ -98,13 +103,14 @@ object FTMSFeatureData {
                 elapsedTimeSupported = (machineFeatureBits and FEATURE_ELAPSED_TIME) != 0,
                 remainingTimeSupported = (machineFeatureBits and FEATURE_REMAINING_TIME) != 0,
                 powerMeasurementSupported = (machineFeatureBits and FEATURE_POWER_MEASUREMENT) != 0,
-                forceOnBeltAndPowerOutputSupported = (machineFeatureBits and FEATURE_FORCE_ON_BELT_AND_POWER_OUTPUT) != 0
+                forceOnBeltAndPowerOutputSupported = (machineFeatureBits and FEATURE_FORCE_ON_BELT_AND_POWER_OUTPUT) != 0,
+                userDataRetentionSupported = (machineFeatureBits and FEATURE_USER_DATA_RETENTION) != 0,
             )
             Log.i(TAG, "Parsed machine features: ${machineFeatures.supportedFeatureLabels}")
 
             // Parse Target Setting Features if we have enough data (bytes 4-7)
             val targetSettingFeatures = if (data.size >= 8) {
-                val targetFeatureBits = buffer.int and 0x3FFF // bits 0-13
+                val targetFeatureBits = buffer.int and 0x1FFFF // zero unused bits
                 Log.d(TAG, "Target Setting Features: 0x${targetFeatureBits.toString(16).padStart(4, '0')}")
 
                 TargetSettingFeatures(
@@ -121,7 +127,10 @@ object FTMSFeatureData {
                     targetedTimeInTwoHrZonesSupported = (targetFeatureBits and TARGET_TIME_IN_TWO_HR_ZONES) != 0,
                     targetedTimeInThreeHrZonesSupported = (targetFeatureBits and TARGET_TIME_IN_THREE_HR_ZONES) != 0,
                     targetedTimeInFiveHrZonesSupported = (targetFeatureBits and TARGET_TIME_IN_FIVE_HR_ZONES) != 0,
-                    indoorBikeSimulationSupported = (targetFeatureBits and TARGET_INDOOR_BIKE_SIMULATION) != 0
+                    indoorBikeSimulationSupported = (targetFeatureBits and TARGET_INDOOR_BIKE_SIMULATION) != 0,
+                    wheelCircumferenceConfigurationSupported = (targetFeatureBits and TARGET_WHEEL_CIRCUMFERENCE_CONFIGURATION) != 0,
+                    spinDownControlSupported = (targetFeatureBits and TARGET_SPIN_DOWN_CONTROL) != 0,
+                    targetedCadenceConfigurationSupported = (targetFeatureBits and TARGET_TARGETED_CADENCE_CONFIGURATION) != 0,
                 ).also {
                     Log.i(TAG, "Parsed target setting features: ${it.supportedFeatureLabels}")
                 }

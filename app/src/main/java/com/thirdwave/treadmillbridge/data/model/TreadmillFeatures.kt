@@ -20,7 +20,8 @@ data class TreadmillFeatures(
     val elapsedTimeSupported: Boolean = false,
     val remainingTimeSupported: Boolean = false,
     val powerMeasurementSupported: Boolean = false,
-    val forceOnBeltAndPowerOutputSupported: Boolean = false
+    val forceOnBeltAndPowerOutputSupported: Boolean = false,
+    val userDataRetentionSupported: Boolean = false
 ) {
     /**
      * List of human-readable labels for supported features.
@@ -39,10 +40,11 @@ data class TreadmillFeatures(
             if (strideCountSupported) add("Stride")
             if (expendedEnergySupported) add("Energy")
             if (heartRateMeasurementSupported) add("Heart Rate")
-            if (metabolicEquivalentSupported) add("MET")
+            if (metabolicEquivalentSupported) add("Metabolic Equivalent")
             if (elapsedTimeSupported) add("Elapsed Time")
             if (remainingTimeSupported) add("Remaining Time")
             if (powerMeasurementSupported) add("Power")
-            if (forceOnBeltAndPowerOutputSupported) add("Force/Power")
+            if (forceOnBeltAndPowerOutputSupported) add("Force on Belt")
+            if (userDataRetentionSupported) add("User Data")
         }
 }
