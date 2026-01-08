@@ -39,11 +39,15 @@ fun DashboardScreen(
 
     // Prepare metrics data as a list for the grid
     val metrics = listOf(
-        MetricItem("Speed", String.format(Locale.getDefault(), "%.1f", uiState.metrics.speedKph), "km/h"),
+        MetricItem("Speed", uiState.metrics.speedKph?.let { String.format(Locale.getDefault(), "%.1f", it) } ?: "--", "km/h"),
+        MetricItem("Avg Speed", uiState.metrics.averageSpeedKph?.let { String.format(Locale.getDefault(), "%.1f", it) } ?: "--", "km/h"),
         MetricItem("Pace", uiState.metrics.paceString ?: "--", "min/km"),
-        MetricItem("Incline", String.format(Locale.getDefault(), "%.1f", uiState.metrics.inclinePercent), "%"),
-        MetricItem("Cadence", uiState.metrics.cadence.toString(), "spm"),
-        MetricItem("Heart Rate", if (uiState.hrMetrics.heartRateBpm > 0) uiState.hrMetrics.heartRateBpm.toString() else "--", "bpm")
+        MetricItem("Incline", uiState.metrics.inclinePercent?.let { String.format(Locale.getDefault(), "%.1f", it) } ?: "--", "%"),
+        MetricItem("Cadence", uiState.metrics.cadence?.toString() ?: "--", "spm"),
+        MetricItem("Distance", uiState.metrics.totalDistanceKm?.let { String.format(Locale.getDefault(), "%.2f", it) } ?: "--", "km"),
+        MetricItem("Elevation", uiState.metrics.elevationGainMeters?.let { String.format(Locale.getDefault(), "%.1f", it) } ?: "--", "m"),
+        MetricItem("Time", uiState.metrics.elapsedTimeString ?: "--", ""),
+        MetricItem("Heart Rate", uiState.hrMetrics.heartRateBpm.takeIf { it > 0 }?.toString() ?: "--", "bpm")
     )
 
     LazyVerticalGrid(
@@ -110,7 +114,15 @@ private fun MetricCard(name: String, value: String, unit: String, modifier: Modi
 @Composable
 fun DashboardScreenPreview_Landscape() {
     val mockState = TreadmillUiState(
-        metrics = TreadmillMetrics(speedKph = 15.2f, inclinePercent = 0.0f, cadence = 160),
+        metrics = TreadmillMetrics(
+            speedKph = 15.2f,
+            averageSpeedKph = 14.8f,
+            inclinePercent = 0.0f,
+            cadence = 160,
+            totalDistanceMeters = 5230,
+            elevationGainMeters = 45f,
+            elapsedTimeSeconds = 1845
+        ),
         hrMetrics = com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics(heartRateBpm = 145),
         permissionsGranted = true
     )
@@ -124,7 +136,15 @@ fun DashboardScreenPreview_Landscape() {
 @Composable
 fun DashboardScreenPreview_Portrait() {
     val mockState = TreadmillUiState(
-        metrics = TreadmillMetrics(speedKph = 9.8f, inclinePercent = 1.5f, cadence = 140),
+        metrics = TreadmillMetrics(
+            speedKph = 9.8f,
+            averageSpeedKph = 9.5f,
+            inclinePercent = 1.5f,
+            cadence = 140,
+            totalDistanceMeters = 2150,
+            elevationGainMeters = 22f,
+            elapsedTimeSeconds = 780
+        ),
         hrMetrics = com.thirdwave.treadmillbridge.data.model.HrMonitorMetrics(heartRateBpm = 132),
         permissionsGranted = true
     )

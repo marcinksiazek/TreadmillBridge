@@ -11,10 +11,8 @@ import java.nio.ByteOrder
  * Based on Fitness Machine Service v1.0 specification.
  */
 data class FTMSTreadmillData(
-    // Always present
-    val instantaneousSpeedKmh: Float,
-
     // Optional fields based on flags
+    val instantaneousSpeedKmh: Float? = null,
     val averageSpeedKmh: Float? = null,
     val totalDistanceMeters: Int? = null,
     val inclinationPercent: Float? = null,
@@ -79,11 +77,7 @@ data class FTMSTreadmillData(
                 val flags = buffer.short.toInt() and 0xFFFF
                 Log.d(TAG, "Flags: 0x${flags.toString(16).padStart(4, '0')}")
 
-                // Parse instantaneous speed (always present)
-                val speedRaw = buffer.short.toInt() and 0xFFFF
-                val instantaneousSpeedKmh = speedRaw * 0.01f
-                Log.d(TAG, "Instantaneous Speed: $instantaneousSpeedKmh km/h")
-
+                var instantaneousSpeedKmh: Float? = null
                 var averageSpeed: Float? = null
                 var totalDistance: Int? = null
                 var inclination: Float? = null
@@ -101,7 +95,16 @@ data class FTMSTreadmillData(
                 var forceOnBelt: Int? = null
                 var powerOutput: Int? = null
 
-                // Parse optional fields based on flags
+                if (flags and FLAG_MORE_DATA == 0) {
+                    if (buffer.remaining() >= 2) {
+                        val instantaneousSpeedRaw = buffer.short.toInt() and 0xFFFF
+                        instantaneousSpeedKmh = instantaneousSpeedRaw * 0.01f
+                        Log.d(TAG, "Instantaneous Speed: $instantaneousSpeedKmh km/h")
+                    } else {
+                        Log.w(TAG, "Not enough data for instantaneous speed")
+                    }
+                }
+
                 if (flags and FLAG_AVERAGE_SPEED != 0) {
                     if (buffer.remaining() >= 2) {
                         val avgSpeedRaw = buffer.short.toInt() and 0xFFFF
@@ -280,9 +283,9 @@ data class FTMSTreadmillData(
             // Write flags
             buffer.putShort(flags.toShort())
 
-            // Write instantaneous speed (always present)
-            val speedRaw = (data.instantaneousSpeedKmh / 0.01f).toInt().toShort()
-            buffer.putShort(speedRaw)
+//            // Write instantaneous speed (always present)
+//            val speedRaw = (data.instantaneousSpeedKmh / 0.01f).toInt().toShort()
+//            buffer.putShort(speedRaw)
 
             // Write optional fields
             data.averageSpeedKmh?.let {

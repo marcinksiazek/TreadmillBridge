@@ -265,9 +265,41 @@ fun DevicesScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        // Speed and Incline ranges
+                        val speedRange = uiState.speedRange
+                        val inclineRange = uiState.inclineRange
+                        Text(
+                            text = "Speed: %.1f - %.1f km/h @ %.1f km/h".format(
+                                java.util.Locale.getDefault(),
+                                speedRange.minKmh,
+                                speedRange.maxKmh,
+                                speedRange.stepKmh
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "Incline: %.1f - %.1f %% @ %.1f %%".format(
+                                java.util.Locale.getDefault(),
+                                inclineRange.minPercent,
+                                inclineRange.maxPercent,
+                                inclineRange.stepPercent
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         // Machine feature chips from FTMS Feature characteristic
                         val featureLabels = uiState.treadmillFeatures?.supportedFeatureLabels ?: emptyList()
                         if (featureLabels.isNotEmpty()) {
+                            Text(
+                                text = "Supported features",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
                             FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -287,6 +319,12 @@ fun DevicesScreen(
                         val targetLabels = uiState.targetSettingFeatures?.supportedFeatureLabels ?: emptyList()
                         if (targetLabels.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Supported targets",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
                             FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)

@@ -212,12 +212,17 @@ class BluetoothDataSource @Inject constructor(
 
         treadmillBleManager.onMetricsReceived = { ftmsData ->
             scope.launch {
-                _treadmillMetrics.value = TreadmillMetrics(
-                    speedKph = ftmsData.instantaneousSpeedKmh,
-                    inclinePercent = ftmsData.inclinationPercent ?: 0f,
-                    cadence = 0 // FTMS doesn't have cadence by default
+                // Merge incoming data with current state - only update fields present in notification
+                val current = _treadmillMetrics.value
+                _treadmillMetrics.value = current.copy(
+                    speedKph = ftmsData.instantaneousSpeedKmh ?: current.speedKph,
+                    averageSpeedKph = ftmsData.averageSpeedKmh ?: current.averageSpeedKph,
+                    inclinePercent = ftmsData.inclinationPercent ?: current.inclinePercent,
+                    totalDistanceMeters = ftmsData.totalDistanceMeters ?: current.totalDistanceMeters,
+                    elevationGainMeters = ftmsData.elevationGainMeters ?: current.elevationGainMeters,
+                    elapsedTimeSeconds = ftmsData.elapsedTimeSeconds ?: current.elapsedTimeSeconds
                 )
-                Log.d(TAG, "Metrics updated: speed=${ftmsData.instantaneousSpeedKmh} kph")
+                Log.d(TAG, "Metrics updated: speed=${_treadmillMetrics.value.speedKph} km/h, dist=${_treadmillMetrics.value.totalDistanceMeters} m")
             }
         }
         
